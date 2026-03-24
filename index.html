@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Pra Store</title>
+
+<style>
+body {
+  background: radial-gradient(circle, #ff4ecd, #0f172a);
+  font-family: Arial;
+  color: white;
+  text-align:center;
+}
+
+.container {
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+
+.card {
+  width:200px;
+  margin:10px;
+  padding:15px;
+  background:rgba(255,255,255,0.1);
+  border-radius:15px;
+  box-shadow:0 0 15px #ff4ecd;
+}
+
+img { width:100px; }
+
+button {
+  background:#ff4ecd;
+  border:none;
+  padding:8px;
+  border-radius:10px;
+  color:white;
+}
+
+#cs {
+  position:fixed;
+  bottom:20px;
+  right:20px;
+}
+</style>
+</head>
+<body>
+
+<h2>Pra Store</h2>
+
+<div class="container" id="produk"></div>
+
+<div id="qris"></div>
+<p id="status"></p>
+
+<div id="cs">
+<a href="https://wa.me/6285166413821" target="_blank">
+<button>💬 CS</button>
+</a>
+</div>
+
+<script>
+let selectedProduct, paymentId;
+
+// load produk
+async function loadProduk(){
+  let res = await fetch('/products');
+  let data = await res.json();
+
+  let el = document.getElementById('produk');
+
+  for(let key in data){
+    let p = data[key];
+
+    el.innerHTML += `
+    <div class="card">
+      <img src="${p.image}">
+      <h4>${p.name}</h4>
+      <p>Rp ${p.price}</p>
+      <p>Stock: ${p.stock}</p>
+      <button onclick="beli('${key}')">Beli</button>
+    </div>`;
+  }
+}
+
+// beli
+async function beli(product){
+  selectedProduct = product;
+
+  let res = await fetch('/create-payment',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({product})
+  });
+
+  let data = await res.json();
+  paymentId = data.id;
+
+  document.getElementById('qris').innerHTML =
+    `<img src="${data.qr}" width="200">`;
+
+  startTimer(data.expired);
+  cekStatus();
+}
+
+// timer
+function startTimer(exp){
+  let t = setInterval(()=>{
+    let sisa = Math.floor((exp - Date.now())/1000);
+    if(sisa <= 0){
+      clearInterval(t);
+      document.getElementById('status').innerText = 'Expired';
+    } else {
+      document.getElementById('status').innerText = 'Waktu: '+sisa+' detik';
+    }
+  },1000);
+}
+
+// cek status
+function cekStatus(){
+  let i = setInterval(async ()=>{
+    let res = await fetch('/check-payment',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        id:paymentId,
+        product:selectedProduct
+      })
+    });
+
+    let data = await res.json();
+
+    if(data.status){
+      clearInterval(i);
+
+      let pesan = encodeURIComponent(data.pesan);
+
+      document.getElementById('status').innerHTML = `
+      ✅ Berhasil<br>
+      ${data.produk}<br>
+      Email: ${data.akun.email}<br>
+      Password: ${data.akun.password}<br><br>
+      <a href="https://wa.me/?text=${pesan}" target="_blank">
+        <button>Kirim ke WA</button>
+      </a>`;
+    }
+  },5000);
+}
+
+loadProduk();
+</script>
+
+</body>
+</html>
